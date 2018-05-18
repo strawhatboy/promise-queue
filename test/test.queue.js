@@ -401,4 +401,149 @@ describe('queue', function () {
         });
 
     });
+
+    describe('clear', function () {
+
+        it('clear the queue', function (done) {
+            var maxPending = 1;
+            var expectedQueueLength = 9;
+            var queue = new Queue(maxPending);
+
+            function generator() {
+                return function () {
+                    new vow.Promise(function (resolve) {
+                        setTimeout(function () {
+                            resolve();
+                        }, 100);
+                    });
+                };
+            }
+
+            var count = 1;
+            function check() {
+                expectedQueueLength--;
+
+                if (count-- <= 0) {
+                    // clear
+                    queue.clear();
+                    expect(queue.getQueueLength()).to.be.eql(0);
+
+                    // still another in the queue, we'll hit here twice
+                    if (count === -2) {
+                        return done();
+                    }
+                } else {
+                    expect(queue.getQueueLength()).to.be.eql(expectedQueueLength);
+                }
+            }
+
+            // Note: extra promises will be moved to a queue
+            for (var i = 0; i <= expectedQueueLength; i++) {
+                queue.add(generator()).then(check).done();
+            }
+        });
+    });
+
+    describe('options', function () {
+        it('stopOnFailure - default', function (done) {
+            var maxPending = 1;
+            var queue = new Queue(maxPending, undefined, {
+                stopOnFailure: true
+            });
+
+            function generator() {
+                return function () {
+                    return new vow.Promise(function (resolve) {
+                        setTimeout(function () {
+                            resolve();
+                        }, 100);
+                    });
+                };
+            }
+
+            function failureGenerator() {
+                return function () {
+                    return new vow.Promise(function (resolve, reject) {
+                        setTimeout(function () {
+                            reject();
+                        }, 100);
+                    });
+                }
+            }
+
+            function check() {
+                // do nothing
+            }
+
+            function failureCheck() {
+                expect(queue.getQueueLength()).to.be.eql(0)
+                return done()
+            }
+
+            queue.add(generator()).then(check).done();
+            queue.add(generator()).then(check).done();
+            queue.add(generator()).then(check).done();
+            queue.add(failureGenerator()).then(check, failureCheck);
+            queue.add(generator()).then(check).done();
+            queue.add(generator()).then(check).done();
+            queue.add(generator()).then(check).done();
+        });
+
+        it('stopOnFailure - stop after failing several times', function (done) {
+            var maxPending = 1;
+            var expectedQueueLength = 7;
+            var queue = new Queue(maxPending, undefined, {
+                stopOnFailure: true,
+                stopOnFailureCount: 2   // fail twice, clear the queue
+            });
+
+            function generator() {
+                return function () {
+                    return new vow.Promise(function (resolve) {
+                        setTimeout(function () {
+                            resolve();
+                        }, 100);
+                    });
+                };
+            }
+
+            function failureGenerator() {
+                return function () {
+                    return new vow.Promise(function (resolve, reject) {
+                        setTimeout(function () {
+                            reject();
+                        }, 100);
+                    });
+                }
+            }
+
+            function check() {
+                // do nothing
+                expectedQueueLength--;
+            }
+
+            function failureCheck() {
+                expectedQueueLength--;
+                queueLength = queue.getQueueLength();
+                expect(queueLength).to.be.eql(expectedQueueLength)
+            }
+
+            function failureCheck2() {
+                expectedQueueLength--;
+                queueLength = queue.getQueueLength();
+                expect(queueLength).to.be.eql(0)
+                return done()
+            }
+
+
+            queue.add(generator()).then(check).done();
+            queue.add(generator()).then(check).done();
+            queue.add(generator()).then(check).done();
+            queue.add(failureGenerator()).then(check, failureCheck);
+            queue.add(failureGenerator()).then(check, failureCheck2);
+            queue.add(generator()).then(check).done();
+            queue.add(generator()).then(check).done();
+            queue.add(generator()).then(check).done();
+        });
+    });
 });
