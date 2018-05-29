@@ -11,6 +11,7 @@ var queueSrc = require.resolve(process.env.PROMISE_QUEUE_COVERAGE ? '../lib-cov'
     queueCode = fs.readFileSync(queueSrc, 'utf8');
 
 var Queue;
+var Signal;
 
 function clean() {
     try {
@@ -20,7 +21,8 @@ function clean() {
 }
 
 function reset() {
-    Queue = require('..');
+    Queue = require('..').Queue;
+    Signal = require('..').Signal;
 }
 
 function configure() {
@@ -33,7 +35,11 @@ describe('queue export', function () {
     });
 
     it('queue should be exported in commonjs environment', function () {
-        expect(require('..')).to.be.a('function');
+        expect(require('..').Queue).to.be.a('function');
+    });
+
+    it('queue signal should be exported in commonjs environment', function () {
+        expect(require('..').Signal).to.be.a('function');
     });
 
     it('queue should be exported in AMD environment', function () {
@@ -62,7 +68,19 @@ describe('queue export', function () {
 
         vm.runInNewContext(queueCode, newGlobal);
 
-        expect(newGlobal.Queue).to.be.a('function');
+        expect(newGlobal.Queue.Queue).to.be.a('function');
+    });
+
+    it('queue signal should be exported in browser or worker environment', function () {
+        var newGlobal = {
+            global: {
+                __coverage__: global.__coverage__
+            }
+        };
+
+        vm.runInNewContext(queueCode, newGlobal);
+
+        expect(newGlobal.Queue.Signal).to.be.a('function');
     });
 });
 
@@ -544,6 +562,29 @@ describe('queue', function () {
             queue.add(generator()).then(check).done();
             queue.add(generator()).then(check).done();
             queue.add(generator()).then(check).done();
+        });
+
+        it('signal', function (done) {
+            var signal = new Signal();
+            var queue = new Queue(1, 1, {
+                signal: signal,
+                signalInterval: 1000
+            });
+
+            setTimeout(function() {
+                signal.setValid();
+            }, 500);
+
+            function generator() {
+                return function () {
+                    return new vow.Promise(function (resolve) {
+                        // resolve immediately
+                        resolve();
+                    });
+                };
+            }
+
+            queue.add(generator()).then(function(){ return done(); }).done();
         });
     });
 });
